@@ -5,17 +5,20 @@ const salt = 10;
 const jwt = require("jsonwebtoken");
 const { getJWTToken } = require("../helper/helper");
 
-const addAgent = async (req, res) => {
+const createAgent = async (req, res) => {
   try {
     const {
       agent_name,
       agent_email,
       agent_mobile,
       agent_password,
-      agent_role,
+      agents,
+      agent_role, //agent,team_leader,group_leader
     } = req.body;
     if (!agent_name) {
-      return res.status(400)({ msg: "agent_name is missing", success: false });
+      return res
+        .status(400)
+        .json({ msg: "agent_name is missing", success: false });
     }
     if (!agent_email) {
       return res
@@ -32,13 +35,13 @@ const addAgent = async (req, res) => {
         .status(400)
         .json({ msg: "password must be of 8 characters", success: false });
     }
-    const agentExist = await Agents.findOne({ email });
+    const agentExist = await Agents.findOne({ agent_email });
     if (agentExist) {
       return res
         .status(400)
         .json({ msg: "email already exist", success: false });
     }
-    const hashPassword = bcrypt.hashSync(password, salt);
+    const hashPassword = bcrypt.hashSync(agent_password, salt);
 
     const agentObj = new Agents({
       agent_name,
@@ -46,6 +49,7 @@ const addAgent = async (req, res) => {
       agent_mobile,
       agent_password: hashPassword,
       agent_role,
+      agents,
     });
 
     await agentObj.save();
@@ -53,7 +57,7 @@ const addAgent = async (req, res) => {
       .status(200)
       .json({ msg: "agent added successfully", suceess: true });
   } catch (error) {
-    console.log("error in addAgent", error);
+    console.log("error in createAgent", error);
     return res.status(500).json({ msg: "server error ", success: false });
   }
 };
@@ -89,13 +93,15 @@ const updateAgent = async (req, res) => {
     if (!agent) {
       res.send("ther isn't any agent of this id");
     }
-    let { newName, newEmail, newMobile } = req.body;
+    let { new_name, new_email, new_mobile } = req.body;
     agent.agent_name =
-      newName == "" || newName == undefined ? agent_name : newName;
+      new_name == "" || new_name == undefined ? agent.agent_name : new_name;
     agent.agent_email =
-      newEmail == "" || newEmail == undefined ? agent_email : newEmail;
+      new_email == "" || new_email == undefined ? agent.agent_email : new_email;
     agent.agent_mobile =
-      newMobile == "" || newMobile == undefined ? agent_mobile : newMobile;
+      new_mobile == "" || new_mobile == undefined
+        ? agent.agent_mobile
+        : new_mobile;
     await agent.save();
     return res.send("agent updated successfully");
   } catch (error) {
@@ -104,10 +110,10 @@ const updateAgent = async (req, res) => {
   }
 };
 
-const deleteAgent = (req, res) => {
+const deleteAgent = async (req, res) => {
   try {
     const id = req.params.id;
-    const delAgent = Agents.deleteOne({ _id: id });
+    const delAgent = await Agents.deleteOne({ _id: id });
     return res.send("agent deleted successfully");
   } catch (error) {
     console.log("error in deleteAgent", error);
@@ -115,4 +121,60 @@ const deleteAgent = (req, res) => {
   }
 };
 
-module.exports = { addAgent, getAgent, getAgents, updateAgent, deleteAgent };
+//getting all team_leaders
+
+const getAllTeamLeaders = async (req, res) => {
+  try {
+    let allTeamLeaders = await Agents.find({ agent_role: "team_leader" });
+    return res.status(200).json(allTeamLeaders);
+  } catch (error) {
+    console.log("error in getAllTeamLeaders");
+    return res.status(500).json({ msg: "server error" });
+  }
+};
+
+//getting all agents by team_leader
+
+const getAllAgentByTeamLeader = async (req, res) => {
+  try {
+    const team_leader_id = req.query.team_leader_id;
+    const teamLeader = await Agents.findOne({ _id: team_leader_id });
+
+    const agentsByTeamLeader = await Agents.find({
+      _id: { $in: teamLeader.agents },
+    });
+
+    return res.status(200).json(agentsByTeamLeader);
+  } catch (error) {
+    console.log("error in getAllAgentByTeamLeader");
+    return res.status(500).json({ msg: "server error" });
+  }
+};
+
+//getting team_leader by agents
+
+const getTeamLeaderByAgent = async (req, res) => {
+  try {
+    const agent_id = req.query.agent_id;
+
+    const teamLeaderByAgent = await Agents.findOne({
+      agents: { $in: [agent_id] },
+    });
+
+    return res.status(200).json(teamLeaderByAgent);
+  } catch (error) {
+    console.log("error in getTeamLeaderByAgent", error);
+    return res.status(500).json({ msg: "server error" });
+  }
+};
+
+module.exports = {
+  createAgent,
+  getAgent,
+  getAgents,
+  updateAgent,
+  deleteAgent,
+  getAllTeamLeaders,
+  getAllAgentByTeamLeader,
+  getTeamLeaderByAgent,
+};
